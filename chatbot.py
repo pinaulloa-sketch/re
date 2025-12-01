@@ -24,7 +24,7 @@ class ChatBot:
         
         self.client = Groq(api_key=api_key)
         # Usando Llama 3.1 70B - Modelo potente y gratuito
-        self.model = "llama-3.1-70b-versatile"
+        self.model = "llama-3.1-8b-instant"
     
     def build_chat_context(self, user_id: int) -> List[Dict]:
         """
