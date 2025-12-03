@@ -1,20 +1,14 @@
-"""
-Módulo del chatbot con integración a Groq
-"""
 import os
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
 from groq import Groq
-import database as db
+import database as bd
 
-# Cargar variables de entorno
 load_dotenv()
 
-class ChatBot:
-    """Clase para gestionar el chatbot con Groq"""
+class ChatBotIA:
     
     def __init__(self):
-        """Inicializa el cliente de Groq"""
         api_key = os.getenv('GROQ_API_KEY')
         if not api_key or api_key == 'tu_api_key_aqui':
             raise ValueError(
@@ -22,94 +16,54 @@ class ChatBot:
                 "Obtén una API key gratis en: https://console.groq.com/keys"
             )
         
-        self.client = Groq(api_key=api_key)
-        # Usando Llama 3.1 70B - Modelo potente y gratuito
-        self.model = "llama-3.1-8b-instant"
+        self.cliente = Groq(api_key=api_key)
+        self.modelo = "llama-3.1-8b-instant"
     
-    def build_chat_context(self, user_id: int) -> List[Dict]:
-        """
-        Construye el contexto de chat para Groq
+    def construir_contexto_chat(self, id_usuario: int) -> List[Dict]:
+        historial = bd.obtener_conversaciones_usuario(id_usuario)
         
-        Args:
-            user_id: ID del usuario
-            
-        Returns:
-            Lista de mensajes formateados para Groq
-        """
-        history = db.get_user_conversations(user_id)
-        
-        # Groq usa formato OpenAI compatible
-        chat_history = []
-        for msg in history:
-            chat_history.append({
-                'role': msg['role'] if msg['role'] == 'user' else 'assistant',
-                'content': msg['content']
+        historial_chat = []
+        for mensaje in historial:
+            historial_chat.append({
+                'role': mensaje['role'] if mensaje['role'] == 'user' else 'assistant',
+                'content': mensaje['content']
             })
         
-        return chat_history
+        return historial_chat
     
-    def send_message(self, user_id: int, message: str) -> str:
-        """
-        Envía un mensaje al chatbot y obtiene la respuesta
+    def enviar_mensaje(self, id_usuario: int, mensaje: str) -> str:
+        bd.guardar_mensaje(id_usuario, 'user', mensaje)
         
-        Args:
-            user_id: ID del usuario
-            message: Mensaje del usuario
-            
-        Returns:
-            Respuesta del chatbot
-        """
-        # Guardar el mensaje del usuario
-        db.save_message(user_id, 'user', message)
-        
-        # Obtener contexto de la conversación
-        chat_history = self.build_chat_context(user_id)
+        historial_chat = self.construir_contexto_chat(id_usuario)
         
         try:
-            # Llamar a la API de Groq
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=chat_history,
+            respuesta = self.cliente.chat.completions.create(
+                model=self.modelo,
+                messages=historial_chat,
                 temperature=0.7,
                 max_tokens=1024,
             )
             
-            response_text = response.choices[0].message.content
+            texto_respuesta = respuesta.choices[0].message.content
             
-            # Guardar respuesta del asistente
-            db.save_message(user_id, 'assistant', response_text)
+            bd.guardar_mensaje(id_usuario, 'assistant', texto_respuesta)
             
-            return response_text
+            return texto_respuesta
         
         except Exception as e:
-            error_message = f"Error al comunicarse con Groq: {str(e)}"
-            print(error_message)
+            mensaje_error = f"Error al comunicarse con Groq: {str(e)}"
+            print(mensaje_error)
             return f"Lo siento, ocurrió un error: {str(e)}"
     
-    def clear_history(self, user_id: int):
-        """
-        Limpia el historial de conversación de un usuario
-        
-        Args:
-            user_id: ID del usuario
-        """
-        db.clear_user_conversations(user_id)
+    def limpiar_historial(self, id_usuario: int):
+        bd.limpiar_conversaciones_usuario(id_usuario)
     
-    def get_conversation_summary(self, user_id: int) -> Dict:
-        """
-        Obtiene un resumen de la conversación del usuario
-        
-        Args:
-            user_id: ID del usuario
-            
-        Returns:
-            Diccionario con estadísticas de la conversación
-        """
-        count = db.get_conversation_count(user_id)
-        conversations = db.get_user_conversations(user_id, limit=1)
+    def obtener_resumen_conversacion(self, id_usuario: int) -> Dict:
+        cantidad = bd.obtener_cantidad_conversaciones(id_usuario)
+        conversaciones = bd.obtener_conversaciones_usuario(id_usuario, limite=1)
         
         return {
-            'total_messages': count,
-            'has_history': count > 0,
-            'last_message': conversations[-1] if conversations else None
+            'total_mensajes': cantidad,
+            'tiene_historial': cantidad > 0,
+            'ultimo_mensaje': conversaciones[-1] if conversaciones else None
         }
